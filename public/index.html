@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trending Lab</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --line: #e4e4e0; --text: #1b1b1a; --muted: #75756f;
+    --hi: #c8361f; --hi-bg: #fbe9e5; --med: #a86b00; --med-bg: #fbf1dc; --info: #3256a8; --info-bg: #e7edf9;
+    --ok: #1f7a4d; --up: #1f7a4d; --down: #c8361f; --accent: #1b1b1a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121211; --panel: #1b1b1a; --line: #2c2c2a; --text: #ecece8; --muted: #93938c;
+      --hi: #ff7a63; --hi-bg: #3a1d17; --med: #e8b04a; --med-bg: #33280f; --info: #86a7ee; --info-bg: #1a2338;
+      --ok: #5cc890; --up: #5cc890; --down: #ff7a63; --accent: #ecece8; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 ui-sans-serif, -apple-system, "Inter", system-ui, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  h1 { font-size: 15px; margin: 0; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: 12px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.partial { background: var(--med); } .dot.error, .dot.missing_key { background: var(--hi); }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-left: auto; }
+  select, button, label.tog { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; cursor: pointer; }
+  label.tog { display: inline-flex; gap: 6px; align-items: center; }
+  button:hover, select:hover, label.tog:hover { border-color: var(--muted); }
+  main { padding: 14px 16px 40px; }
+  #search { padding: 12px 16px 0; }
+  .sbar { display: flex; gap: 8px; align-items: flex-start; }
+  .sbar textarea { flex: 1; min-width: 0; font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical; min-height: 36px; max-height: 260px; }
+  .sbar textarea:focus { outline: none; border-color: var(--muted); }
+  .sres { margin-top: 10px; }
+  .sres .sum { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .sres td.hit { color: var(--ok); font-weight: 600; }
+  .sres tr.miss td { color: var(--hi); }
+  .sres td.q { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .col.suzi { border-color: var(--ok); }
+  .score { font-size: 11px; font-weight: 600; color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); border-radius: 4px; padding: 0 5px; margin-left: 4px; }
+  .parts td { padding: 3px 8px 3px 0; font-variant-numeric: tabular-nums; }
+  .parts td.pos { color: var(--up); text-align: right; } .parts td.neg { color: var(--down); text-align: right; }
+  @media (max-width: 1300px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-height: 200px; }
+  .col-h { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .col-h .t { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 14px; }
+  .col-h .n { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .col-h .err { font-size: 11.5px; color: var(--hi); margin-top: 4px; word-break: break-word; }
+  .rows { overflow: auto; max-height: calc(100vh - 190px); }
+  .row { display: grid; grid-template-columns: 22px 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .row:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+  .row.flag-high { background: color-mix(in srgb, var(--hi-bg) 55%, transparent); }
+  .row.dim { opacity: .45; }
+  .rk { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; font-size: 12px; }
+  .ic { width: 26px; height: 26px; border-radius: 50%; background: var(--line); object-fit: cover; }
+  .nm { min-width: 0; }
+  .nm .s { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nm .m { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .rt { text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .chain { font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); margin-left: 4px; font-weight: 500; }
+  .chips { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 3px; }
+  .chip { font-size: 10.5px; padding: 0 5px; border-radius: 4px; line-height: 16px; }
+  .chip.high { background: var(--hi-bg); color: var(--hi); } .chip.med { background: var(--med-bg); color: var(--med); } .chip.info { background: var(--info-bg); color: var(--info); }
+  .chip.multi { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+  .empty { padding: 24px 12px; color: var(--muted); text-align: center; }
+  table.ov { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .ov th, .ov td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; font-variant-numeric: tabular-nums; }
+  .ov th { font-weight: 500; color: var(--muted); font-size: 12px; position: sticky; top: 0; background: var(--panel); }
+  .ov tr { cursor: pointer; } .ov tbody tr:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+  .ovwrap { overflow-x: auto; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); width: min(560px, calc(100vw - 32px)); padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  .dlg-h { display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .dlg-b { padding: 12px 16px 16px; max-height: 70vh; overflow: auto; }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px; font-variant-numeric: tabular-nums; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .sec { margin: 14px 0 6px; font-weight: 600; }
+  .flagline { display: flex; gap: 8px; align-items: baseline; margin: 4px 0; }
+  a { color: var(--info); }
+  code { font-size: 11.5px; word-break: break-all; }
+  .ca { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 0 4px; margin-left: 4px; cursor: copy; vertical-align: 1px; }
+  .ca:hover { border-color: var(--line); color: var(--text); background: var(--panel); }
+  .ca.copied { color: var(--ok); border-color: var(--ok); }
+  .ca.full { font-size: 11.5px; margin: 2px 0 0; padding: 2px 6px; border-color: var(--line); word-break: break-all; text-align: left; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Trending Lab</h1>
+  <span id="status" class="muted">Loading…</span>
+  <span id="pills" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+  <div class="controls">
+    <select id="view"><option value="cols">By source</option><option value="overlap">Merged (overlap)</option><option value="excluded">Excluded</option></select>
+    <select id="chain"><option value="">All chains</option></select>
+    <select id="hide">
+      <option value="none">Show everything</option>
+      <option value="dim">Dim high-risk</option>
+      <option value="high">Hide high-risk</option>
+      <option value="any">Hide any flagged</option>
+    </select>
+    <button id="refresh">Poll fresh</button>
+  </div>
+</header>
+<section id="search">
+  <div class="sbar">
+    <textarea id="q" rows="1" placeholder="Search by contract address, ticker or name. Paste a whole list: one per line or comma-separated." spellcheck="false"></textarea>
+    <button id="qclear" title="Clear search">Clear</button>
+  </div>
+  <div id="sres" class="sres"></div>
+</section>
+<main id="main"></main>
+
+<dialog id="dlg"><div class="dlg-h" id="dlg-h"></div><div class="dlg-b" id="dlg-b"></div></dialog>
+
+<script>
+const ORDER = ['jupiter', 'coingecko', 'birdeye'];
+let S = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = (n) => {
+  if (n === null || n === undefined) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
+  if (a >= 1) return '$' + n.toFixed(2);
+  if (a === 0) return '$0';
+  return '$' + n.toPrecision(3);
+};
+const pct = (n) => (n === null || n === undefined ? '—' : `<span class="${n >= 0 ? 'up' : 'down'}">${n >= 0 ? '+' : ''}${n.toFixed(1)}%</span>`);
+const age = (iso) => {
+  if (!iso) return '—';
+  const m = (Date.now() - Date.parse(iso)) / 60000;
+  if (m < 60) return Math.round(m) + 'm';
+  if (m < 1440) return Math.round(m / 60) + 'h';
+  return Math.round(m / 1440) + 'd';
+};
+const worst = (t) => (t.flags.some((f) => f.severity === 'high') ? 'high' : t.flags.some((f) => f.severity === 'med') ? 'med' : null);
+const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+for (const id of ['view', 'chain', 'hide']) {
+  $(id).value = store.get('tl_' + id, $(id).value);
+  $(id).onchange = () => { store.set('tl_' + id, $(id).value); render(); };
+}
+$('refresh').onclick = async () => {
+  $('refresh').disabled = true; $('refresh').textContent = 'Polling…';
+  try { await fetch('/api/refresh', { method: 'POST' }); await load(); }
+  finally { $('refresh').disabled = false; $('refresh').textContent = 'Poll fresh'; }
+};
+
+function visible(tokens) {
+  const chain = $('chain').value, hide = $('hide').value;
+  return tokens.filter((t) => {
+    if (chain && t.chain !== chain) return false;
+    if (hide === 'high' && worst(t) === 'high') return false;
+    if (hide === 'any' && t.flags.some((f) => f.severity !== 'info')) return false;
+    return true;
+  });
+}
+
+function chipsHtml(t, max = 3) {
+  const fl = t.flags.filter((f) => f.severity !== 'info' || ['dex_paid', 'dex_trending', 'add_to_exclusions', 'non_stable_pair', 'known_coin', 'new'].includes(f.id));
+  const multi = t.onLists.length > 1 ? `<span class="chip multi" title="On ${t.onLists.join(', ')}">${t.onLists.length} lists</span>` : '';
+  const shown = fl.slice(0, max).map((f) => `<span class="chip ${f.severity}" title="${esc(f.reason)}">${esc(f.id.replace(/_/g, ' '))}</span>`).join('');
+  const more = fl.length > max ? `<span class="chip med">+${fl.length - max}</span>` : '';
+  return multi || shown ? `<div class="chips">${multi}${shown}${more}</div>` : '';
+}
+
+function rowHtml(t, src) {
+  const dim = $('hide').value === 'dim' && worst(t) === 'high';
+  return `<div class="row ${worst(t) === 'high' ? 'flag-high' : ''} ${dim ? 'dim' : ''}" data-src="${src}" data-key="${esc(t.key)}">
+    <div class="rk">${t.rank ?? ''}</div>
+    ${t.icon ? `<img class="ic" src="${esc(t.icon)}" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="ic"></div>'}
+    <div class="nm">
+      <div class="s">${esc(t.symbol || '?')}<span class="chain">${esc(t.chain)}</span>${caBtn(t.address)}</div>
+      <div class="m">${t.marketCapUsd == null && t.fdvUsd != null ? 'FDV' : 'MC'} ${money(t.marketCapUsd ?? t.fdvUsd)} · Liq ${money(t.liquidityUsd)} · Vol ${S.window} ${money(t.windowVolumeUsd)}${t.volume24hUsd != null ? ` · 24h ${money(t.volume24hUsd)}` : ''}</div>
+      ${chipsHtml(t)}
+    </div>
+    <div class="rt">${money(t.priceUsd)}<br><span class="muted" style="font-size:10.5px">${S.window}</span> ${pct(t.windowChange)}</div>
+  </div>`;
+}
+
+function render() {
+  if (!S) return;
+  const chains = new Set();
+  for (const s of Object.values(S.sources)) for (const t of s.tokens) chains.add(t.chain);
+  const cur = $('chain').value;
+  $('chain').innerHTML = '<option value="">All chains</option>' + [...chains].sort().map((c) => `<option ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('');
+
+  $('pills').innerHTML = ORDER.filter((id) => S.sources[id]).map((id) => {
+    const s = S.sources[id];
+    return `<span class="pill" title="${esc(s.error || '')}"><span class="dot ${s.status}"></span>${esc(S.meta[id].label)} ${s.tokens.length}</span>`;
+  }).join('') + `<span class="pill" title="Removed by config/exclusions.json">Excluded ${(S.excluded || []).length}</span>`
+    + (S.calls ? `<span class="pill" title="API calls in the last poll">API calls ${S.calls.total} · ${[...ORDER, 'dexscreener'].map((id) => `${S.meta[id]?.label || 'DexScreener'} ${S.calls[id] || 0}`).join(' · ')}</span>` : '');
+
+  if ($('view').value === 'overlap') return renderOverlap();
+  if ($('view').value === 'excluded') return renderExcluded();
+
+  $('main').innerHTML = `<div class="grid">${ORDER.map((id) => {
+    const s = S.sources[id], m = S.meta[id];
+    if (!s) return '';
+    const list = visible(s.tokens);
+    const hidden = s.tokens.length - list.length;
+    const err = s.status === 'missing_key' ? `Add ${id === 'birdeye' ? 'BIRDEYE_API_KEY' : 'API key'} to trending_lab/.env` : s.error;
+    return `<section class="col">
+      <div class="col-h">
+        <div class="t"><span>${esc(m.label)}</span><span class="muted" style="font-weight:400;font-size:12px">${list.length}${hidden ? ` · ${hidden} hidden` : ''} · ${s.ms}ms</span></div>
+        <div class="n">${esc(m.note)}</div>
+        ${err ? `<div class="err">${esc(err)}</div>` : ''}
+      </div>
+      <div class="rows">${list.length ? list.map((t) => rowHtml(t, id)).join('') : `<div class="empty">${s.tokens.length ? 'All filtered out' : 'No data'}</div>`}</div>
+    </section>`;
+  }).join('')}${suziColHtml()}</div>`;
+}
+
+// Fourth column: the combined, ranked "Suzi Trending" list (red tokens never appear).
+function suziColHtml() {
+  const all = S.ranked || [];
+  const list = all.filter((r) => !$('chain').value || r.chain === $('chain').value)
+    .filter((r) => $('hide').value !== 'any' || !r.flags.some((f) => f.severity === 'med'));
+  const short = { jupiter: 'J', coingecko: 'C', birdeye: 'B' };
+  return `<section class="col suzi">
+    <div class="col-h">
+      <div class="t"><span>Suzi Trending</span><span class="muted" style="font-weight:400;font-size:12px">${list.length} ranked · ${S.rankedHidden || 0} red hidden</span></div>
+      <div class="n">All three lists combined and scored (weights in rules.js → RANKING). Red tokens are never shown. Click a token for its score breakdown.</div>
+    </div>
+    <div class="rows">${list.map((r) => `<div class="row" data-src="${r.src}" data-key="${esc(r.key)}">
+      <div class="rk">${r.rank}</div>
+      ${r.icon ? `<img class="ic" src="${esc(r.icon)}" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="ic"></div>'}
+      <div class="nm">
+        <div class="s">${esc(r.symbol || '?')}<span class="chain">${esc(r.chain)}</span><span class="score">${r.score}</span>${caBtn(r.address)}</div>
+        <div class="m">${Object.entries(r.ranks).map(([id, k]) => `${short[id]}#${k}`).join(' · ')} · ${r.marketCapUsd == null && r.fdvUsd != null ? 'FDV' : 'MC'} ${money(r.marketCapUsd ?? r.fdvUsd)} · Liq ${money(r.liquidityUsd)} · Vol 5m ${money(r.volume5mUsd)}</div>
+        ${chipsHtml({ ...r, onLists: Object.keys(r.ranks) })}
+      </div>
+      <div class="rt">${money(r.priceUsd)}<br><span class="muted" style="font-size:10.5px">24h</span> ${pct(r.change24h)}</div>
+    </div>`).join('') || '<div class="empty">No data</div>'}</div>
+  </section>`;
+}
+
+function renderOverlap() {
+  const merged = new Map();
+  for (const id of ORDER) {
+    const s = S.sources[id];
+    if (!s) continue;
+    for (const t of s.tokens) {
+      const m = merged.get(t.key) || { ...t, ranks: {}, flags: [] };
+      m.ranks[id] = t.rank;
+      for (const k of Object.keys(t)) if (m[k] === null || m[k] === undefined) m[k] = t[k];
+      const ids = new Set(m.flags.map((f) => f.id));
+      for (const f of t.flags) if (!ids.has(f.id)) m.flags.push(f);
+      merged.set(t.key, m);
+    }
+  }
+  const rows = visible([...merged.values()]).sort((a, b) =>
+    Object.keys(b.ranks).length - Object.keys(a.ranks).length ||
+    avgRank(a) - avgRank(b));
+  $('main').innerHTML = `<p class="muted" style="margin:0 0 10px">${rows.length} unique tokens. Sorted by how many sources list them, then average rank. This is not the final score, just a first look at agreement between sources.</p>
+  <div class="ovwrap"><table class="ov"><thead><tr>
+    <th>Token</th>${ORDER.map((id) => `<th>${esc(S.meta[id].label)}</th>`).join('')}<th>MC</th><th>Liq</th><th>Vol ${S.window}</th><th>${S.window}</th><th>Vol 24h</th><th>24h</th><th>Age</th><th>Flags</th>
+  </tr></thead><tbody>${rows.map((t) => `<tr data-key="${esc(t.key)}" data-src="${Object.keys(t.ranks)[0]}" class="${$('hide').value === 'dim' && worst(t) === 'high' ? 'dim' : ''}">
+    <td style="white-space:nowrap"><b>${esc(t.symbol || '?')}</b><span class="chain">${esc(t.chain)}</span>${caBtn(t.address)}</td>
+    ${ORDER.map((id) => `<td>${t.ranks[id] ? '#' + t.ranks[id] : '<span class="muted">·</span>'}</td>`).join('')}
+    <td>${money(t.marketCapUsd ?? t.fdvUsd)}</td><td>${money(t.liquidityUsd)}</td><td>${money(t.windowVolumeUsd)}</td><td>${pct(t.windowChange)}</td><td>${money(t.volume24hUsd)}</td><td>${pct(t.change24h)}</td><td>${age(t.createdAt)}</td>
+    <td>${t.flags.filter((f) => f.severity !== 'info').map((f) => `<span class="chip ${f.severity}" title="${esc(f.reason)}">${esc(f.id.replace(/_/g, ' '))}</span>`).join(' ')}</td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+function renderExcluded() {
+  const rows = (S.excluded || []).filter((e) => !$('chain').value || e.chain === $('chain').value);
+  $('main').innerHTML = `<p class="muted" style="margin:0 0 10px">${rows.length} tokens removed this poll because their address is in <code>config/exclusions.json</code>. They never reach the lists or the flags.</p>
+  <div class="ovwrap"><table class="ov"><thead><tr><th>Source</th><th>Rank</th><th>Token</th><th>Chain</th><th>List</th><th>Listed as</th><th>Note</th></tr></thead><tbody>
+  ${rows.map((e) => `<tr style="cursor:default"><td>${esc(S.meta[e.source].label)}</td><td>#${e.rank}</td><td><b>${esc(e.symbol)}</b>${caBtn(e.address)}</td><td>${esc(e.chain)}</td>
+    <td><span class="chip ${e.list === 'stablecoins' ? 'info' : 'med'}">${esc(e.list)}</span></td><td>${esc(e.listedAs)}</td><td class="muted">${esc(e.note || '')}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+const avgRank = (t) => { const r = Object.values(t.ranks); return r.reduce((a, b) => a + b, 0) / r.length; };
+
+// Contract-address copy button. Short form in lists, full address in the detail popup.
+function caBtn(addr, full = false) {
+  if (!addr) return '';
+  const label = full ? addr : `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+  return `<button class="ca${full ? ' full' : ''}" data-ca="${esc(addr)}" title="Copy contract address">${esc(label)} ⧉</button>`;
+}
+// Copy synchronously inside the click first (works even where the async Clipboard API
+// is blocked, e.g. embedded browsers), then fall back to the Clipboard API.
+async function copyText(text) {
+  const ta = Object.assign(document.createElement('textarea'), { value: text, readOnly: true });
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  (document.querySelector('dialog[open]') || document.body).appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch {}
+  ta.remove();
+  if (ok) return true;
+  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+}
+
+document.addEventListener('click', async (e) => {
+  const ca = e.target.closest('[data-ca]');
+  if (ca) {
+    e.stopPropagation();
+    const ok = await copyText(ca.dataset.ca);
+    const prev = ca.innerHTML;
+    ca.classList.add('copied'); ca.textContent = ok ? 'Copied ✓' : 'Copy failed';
+    setTimeout(() => { ca.classList.remove('copied'); ca.innerHTML = prev; }, 1200);
+    return;
+  }
+  const el = e.target.closest('[data-key]');
+  if (!el || !S) return;
+  const key = el.dataset.key;
+  const all = ORDER.flatMap((id) => (S.sources[id]?.tokens || []).filter((t) => t.key === key).map((t) => [id, t]));
+  const [, t] = all.find(([id]) => id === el.dataset.src) || all[0];
+  $('dlg-h').innerHTML = `${t.icon ? `<img class="ic" src="${esc(t.icon)}">` : ''}<div><b style="font-size:15px">${esc(t.symbol)}</b> <span class="muted">${esc(t.name || '')}</span><span class="chain">${esc(t.chain)}</span><br>${caBtn(t.address, true)}</div><button style="margin-left:auto" onclick="dlg.close()">Close</button>`;
+  const row = (k, v) => `<div>${k}</div><div>${v}</div>`;
+  $('dlg-b').innerHTML = `
+    ${(() => {
+      const r = (S.ranked || []).find((x) => x.key === key);
+      if (!r) return `<div class="sec" style="margin-top:0">Suzi Trending</div><div class="muted">Not ranked: ${t.flags.some((f) => f.severity === 'high') ? 'it has a red flag' : 'not on the combined list'}.</div>`;
+      return `<div class="sec" style="margin-top:0">Suzi Trending #${r.rank} · score ${r.score}</div>
+        <table class="parts">${r.parts.map((p) => `<tr><td>${esc(p.label)}</td><td class="${p.points >= 0 ? 'pos' : 'neg'}">${p.points >= 0 ? '+' : ''}${p.points}</td></tr>`).join('')}</table>`;
+    })()}
+    <div class="sec">Why it's on each list</div>
+    ${all.map(([id, x]) => `<div class="flagline"><span class="chip info">${esc(S.meta[id].label)} #${x.rank}</span><span>${esc(x.why)} · <a href="${esc(x.url)}" target="_blank" rel="noopener">open</a></span></div>`).join('')}
+    <div class="sec">Spam flags</div>
+    ${t.flags.length ? t.flags.map((f) => `<div class="flagline"><span class="chip ${f.severity}">${esc(f.id.replace(/_/g, ' '))}</span><span>${esc(f.reason)}</span></div>`).join('') : '<div class="muted">None triggered</div>'}
+    <div class="sec">Data (${esc(S.meta[el.dataset.src]?.label || '')})</div>
+    <div class="kv">
+      ${row('Price', money(t.priceUsd))}${row('Market cap', money(t.marketCapUsd) + (t.mcapReported ? ` <span class="muted">(source said ${money(t.mcapReported)}, above its FDV — using FDV)</span>` : ''))}${row('FDV', money(t.fdvUsd))}
+      ${row('Liquidity (this source)', money(t.liquidityUsd))}${row('Liquidity (best of all sources)', money(t.m?.liquidityUsd))}${row('Volume 5m / 1h / 24h', money(t.volume5mUsd) + ' / ' + money(t.volume1hUsd) + ' / ' + money(t.volume24hUsd))}
+      ${row('Change 5m / 1h / 24h', pct(t.change5m) + ' / ' + pct(t.change1h) + ' / ' + pct(t.change24h))}
+      ${row('Txns 5m', t.txns5m ?? '—')}
+      ${row('Age (earliest pool)', age(t.m?.createdAt))}${row('DexScreener promotion', t.m?.dexBoosts ? `${t.m.dexBoosts} active boosts${t.m.dexTopRank ? ` · #${t.m.dexTopRank} in top 30` : ''}` : 'None')}${row('Txns 24h (buys/sells)', t.txns24h != null ? `${t.txns24h} (${t.buys24h ?? '?'} / ${t.sells24h ?? '?'})` : '—')}
+      ${row('Traders 24h', t.traders24h ?? '—')}${row('Holders', t.holders ?? '—')}${row('Age', age(t.createdAt))}
+      ${row('Organic score (Jupiter)', t.m?.organicScore != null ? t.m.organicScore.toFixed(0) + '/100' : '—')}
+      ${row('Organic share of 24h volume', t.m?.organicVolumePct != null ? t.m.organicVolumePct.toFixed(2) + '%' : '—')}
+      ${row('Organic buyers 24h', t.m?.organicBuyers24h ?? '—')}
+      ${row('Holders / change 24h', `${t.m?.holders ?? '—'} / ${t.m?.holderChange24h != null ? pct(t.m.holderChange24h) : '—'}`)}
+      ${row('Established', [t.m?.verified ? 'Jupiter-verified' : '', t.m?.cgListed ? `CoinGecko: ${t.m.cgCoinId}` : ''].filter(Boolean).join(' · ') || 'No')}
+      ${row('Mint / freeze disabled', `${t.mintAuthorityDisabled ?? '—'} / ${t.freezeAuthorityDisabled ?? '—'}`)}
+      ${row('Top holders %', t.topHoldersPct != null ? t.topHoldersPct.toFixed(1) + '%' : '—')}
+      ${row('First seen by lab', t.firstSeen ? age(t.firstSeen) + ' ago' : '—')}
+      ${row('Polls seen per list', Object.entries(t.pollsSeen || {}).map(([k, v]) => `${k}: ${v}`).join(', ') || '—')}
+    </div>`;
+  $('dlg').showModal();
+});
+const dlg = $('dlg');
+
+// ---- Search: is each pasted CA / ticker / name on any of the lists?
+const isAddr = (q) => /^0x[0-9a-f]{40}$/i.test(q) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q);
+function parseQueries(text) {
+  return [...new Set(text.split(/[\n,;\t]+/).map((x) => x.trim().replace(/^\$/, '')).filter(Boolean))];
+}
+function searchOne(q) {
+  const ql = q.toLowerCase();
+  const byKey = new Map();
+  const consider = (t, src, rank, excluded) => {
+    const sym = String(t.symbol || '').toLowerCase().replace(/^\$/, ''), name = String(t.name || '').toLowerCase();
+    let how = null;
+    if (isAddr(q)) { if (String(t.address).toLowerCase() === ql) how = 'address'; }
+    else if (sym === ql) how = 'ticker';
+    else if (name === ql) how = 'name';
+    else if (ql.length >= 3 && (name.includes(ql) || sym.includes(ql))) how = 'partial';
+    if (!how) return;
+    const key = `${t.chain}:${String(t.address).toLowerCase()}`;
+    const e = byKey.get(key) || { t, how, ranks: {}, excluded: null };
+    if (excluded) e.excluded = excluded; else { e.ranks[src] = rank; if (!e.t.flags) e.t = t; }
+    if (how !== 'partial') e.how = how;
+    byKey.set(key, e);
+  };
+  for (const id of ORDER) for (const t of S.sources[id]?.tokens || []) consider(t, id, t.rank, null);
+  for (const x of S.excluded || []) consider(x, x.source, x.rank, x);
+  const order = { address: 0, ticker: 1, name: 2, partial: 3 };
+  return [...byKey.values()].sort((a, b) => order[a.how] - order[b.how] || Object.keys(b.ranks).length - Object.keys(a.ranks).length);
+}
+function runSearch() {
+  if (!S) return;
+  const qs = parseQueries($('q').value);
+  store.set('tl_q', $('q').value);
+  if (!qs.length) { $('sres').innerHTML = ''; return; }
+  let found = 0;
+  const rows = qs.map((q) => {
+    const hits = searchOne(q);
+    if (hits.length) found++;
+    if (!hits.length) return `<tr class="miss"><td class="q" title="${esc(q)}">${esc(q)}</td><td colspan="${ORDER.length + 4}">Not on any list in this snapshot</td></tr>`;
+    return hits.map((h, i) => {
+      const t = h.t, src = Object.keys(h.ranks)[0];
+      const flags = (t.flags || []).filter((f) => f.severity !== 'info');
+      return `<tr ${src ? `data-key="${esc(t.key)}" data-src="${src}"` : 'style="cursor:default"'}>
+        <td class="q" title="${esc(q)}">${i === 0 ? esc(q) : ''}</td>
+        <td style="white-space:nowrap"><b>${esc(t.symbol || '?')}</b><span class="chain">${esc(t.chain)}</span>${caBtn(t.address)}${h.how === 'partial' ? ' <span class="chip med" title="Name/ticker contains your text">partial</span>' : ''}</td>
+        ${ORDER.map((id) => h.ranks[id] ? `<td class="hit">#${h.ranks[id]}</td>` : '<td class="muted">—</td>').join('')}
+        ${(() => { const r = t.key && (S.ranked || []).find((x) => x.key === t.key); return r ? `<td class="hit">#${r.rank} <span class="muted">(${r.score})</span></td>` : `<td class="muted">${(t.flags || []).some((f) => f.severity === 'high') ? 'hidden (red)' : '—'}</td>`; })()}
+        <td>${h.excluded ? `<span class="chip info" title="${esc(S.meta[h.excluded.source].label)} #${h.excluded.rank}">excluded: ${esc(h.excluded.list)}</span>` : '<span class="muted">—</span>'}</td>
+        <td>${flags.map((f) => `<span class="chip ${f.severity}" title="${esc(f.reason)}">${esc(f.id.replace(/_/g, ' '))}</span>`).join(' ')}</td>
+      </tr>`;
+    }).join('');
+  }).join('');
+  $('sres').innerHTML = `<div class="sum">${qs.length} searched · <b style="color:var(--ok)">${found} found</b> · <b style="color:var(--hi)">${qs.length - found} not found</b> · snapshot poll #${S.polls}</div>
+    <div class="ovwrap"><table class="ov"><thead><tr><th>Query</th><th>Token</th>${ORDER.map((id) => `<th>${esc(S.meta[id].label)}</th>`).join('')}<th>Suzi</th><th>Excluded</th><th>Flags</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+let qTimer;
+$('q').addEventListener('input', () => {
+  $('q').style.height = 'auto';
+  $('q').style.height = Math.min(260, $('q').scrollHeight + 2) + 'px';
+  clearTimeout(qTimer); qTimer = setTimeout(runSearch, 150);
+});
+$('qclear').onclick = () => { $('q').value = ''; $('q').style.height = ''; runSearch(); $('q').focus(); };
+$('q').value = store.get('tl_q', '');
+
+async function load() {
+  try {
+    S = await (await fetch('/api/state', { cache: 'no-store' })).json();
+    render();
+    runSearch();
+  } catch (e) { $('status').textContent = 'Server unreachable'; }
+}
+// Data only changes when "Poll fresh" is clicked (or on the server's optional timer),
+// so the list stays still while you verify tokens.
+setInterval(() => {
+  if (!S || !S.updatedAt) return;
+  const at = new Date(S.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const ago = age(S.updatedAt) === '0m' ? 'just now' : age(S.updatedAt) + ' ago';
+  let next = '';
+  if (S.nextAt) {
+    const left = Math.max(0, Math.round((Date.parse(S.nextAt) - Date.now()) / 1000));
+    next = ` · next in ${left >= 60 ? `${Math.floor(left / 60)}m ${String(left % 60).padStart(2, '0')}s` : left + 's'}`;
+    if (left === 0 && Date.now() - Date.parse(S.updatedAt) > 5000) load();
+  }
+  $('status').innerHTML = `Snapshot ${at} (${ago}) · ${S.window} window${next} · poll #${S.polls}`;
+}, 1000);
+load();
+</script>
+</body>
+</html>
